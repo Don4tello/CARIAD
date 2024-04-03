@@ -1,0 +1,212 @@
+--DROP VIEW hr.reporting.report_employee_current_project_hours cascade;
+CREATE VIEW  hr.reporting.report_employee_current_project_hours as
+With final as (
+Select
+personalnumber_id,
+COALESCE(planningfield, project_hierarchy_level_2) planningfield,
+COALESCE(solution, 'N/A') solution,
+projektid project_id,
+projekt project,
+jahr as year,
+CASE
+WHEN (monat = 1) THEN to_date(jahr||'-01-01':: character varying,'YYYY-MM-DD':: text)
+WHEN (monat = 2) THEN to_date(jahr||'-02-01':: character varying,'YYYY-MM-DD':: text)
+WHEN (monat = 3) THEN to_date(jahr||'-03-01':: character varying,'YYYY-MM-DD':: text)
+WHEN (monat = 4) THEN to_date(jahr||'-04-01':: character varying,'YYYY-MM-DD':: text)
+WHEN (monat = 5) THEN to_date(jahr||'-05-01':: character varying,'YYYY-MM-DD':: text)
+WHEN (monat = 6) THEN to_date(jahr||'-06-01':: character varying,'YYYY-MM-DD':: text)
+WHEN (monat = 7) THEN to_date(jahr||'-07-01':: character varying,'YYYY-MM-DD':: text)
+WHEN (monat = 8) THEN to_date(jahr||'-08-01':: character varying,'YYYY-MM-DD':: text)
+WHEN (monat = 9) THEN to_date(jahr||'-09-01':: character varying,'YYYY-MM-DD':: text)
+WHEN (monat = 10) THEN to_date(jahr||'-10-01':: character varying,'YYYY-MM-DD':: text)
+WHEN (monat = 11) THEN to_date(jahr||'-11-01':: character varying,'YYYY-MM-DD':: text)
+WHEN (monat = 12) THEN to_date(jahr||'-12-01':: character varying,'YYYY-MM-DD':: text)
+ELSE to_date(booked_project_date, 'YYYY-MM-DD':: text)
+END AS "month",  
+importdate,
+projektstatus,
+project_hierarchy_level_1,
+project_hierarchy_level_2,
+COALESCE(project_hierarchy_level_3, 'N/A') project_hierarchy_level_3,
+project_hierarchy_level_4,
+project_hierarchy_level_5,
+project_hierarchy_level_6,
+internal_external,
+bcs_role,
+fc_role,
+plan_fte,
+is_forecast,
+sap_lead_oe_1,
+sap_lead_oe_2,
+spending_oe,
+spending_oe1,
+spending_oe2,
+spending_oe3,
+trunc(date_trunc('month', importdate)) importmonth,
+istt,
+plan_h,
+month last_month,
+delivery_Date,
+client,                 
+(case when istt = 0 then null else istt end ) booked_hours,
+(case when plan_h = 0 then null else plan_h end ) planned_hours
+--MAX(case when istt <> 0 then month else null end) OVER(PARTITION BY personalnumber_id,is_forecast) AS last_month             
+from core.projecthours
+  where (istt <> 0 or plan_h <> 0) and personalnumber_id is not null
+
+
+group by 1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31,32,33
+
+), total as (
+Select 
+personalnumber_id,
+planningfield,
+solution,
+project_id,
+project,
+year,
+month,
+importdate,
+projektstatus,
+project_hierarchy_level_1,
+project_hierarchy_level_2,
+project_hierarchy_level_3,
+project_hierarchy_level_4,
+project_hierarchy_level_5,
+project_hierarchy_level_6,
+internal_external,
+bcs_role,
+fc_role,
+plan_fte,
+is_forecast,
+booked_hours,
+planned_hours,
+last_month,
+sap_lead_oe_1,
+sap_lead_oe_2,
+spending_oe,
+spending_oe1,
+spending_oe2,
+spending_oe3,
+delivery_date,
+client,
+sum(booked_hours) OVER(PARTITION BY is_forecast,personalnumber_id) AS total_booked_hours,
+sum(booked_hours) OVER(PARTITION BY is_forecast,personalnumber_id, solution ) AS total_booked_hours_solution,
+sum(booked_hours) OVER(PARTITION BY is_forecast,personalnumber_id, planningfield ) AS total_booked_hours_planningfield,
+sum(booked_hours)  
+--sum(CASE WHEN month > add_months(to_date(last_month, 'YYYY-MM-DD'), -3) AND month <= last_month  THEN booked_hours ELSE NULL END ) 
+OVER(PARTITION BY month,is_forecast,personalnumber_id, project ) AS total_booked_hours_project_year,
+sum(booked_hours)
+--sum(CASE WHEN month > add_months(to_date(last_month, 'YYYY-MM-DD'), -3) AND month <= last_month  THEN booked_hours ELSE NULL END ) 
+OVER(PARTITION BY month,is_forecast,personalnumber_id ) AS total_booked_hours_year,
+sum(booked_hours)
+--sum(CASE WHEN month > add_months(to_date(last_month, 'YYYY-MM-DD'), -3) AND month <= last_month  THEN booked_hours ELSE NULL END ) 
+OVER(PARTITION BY month,is_forecast,personalnumber_id, solution ) AS total_booked_hours_solution_year,
+sum(booked_hours)  
+--sum(CASE WHEN month > add_months(to_date(last_month, 'YYYY-MM-DD'), -3) AND month <= last_month  THEN booked_hours ELSE NULL END ) 
+OVER(PARTITION BY month,is_forecast,personalnumber_id, planningfield ) AS total_booked_hours_planningfield_year,
+sum(booked_hours) OVER(PARTITION BY is_forecast,personalnumber_id, project_hierarchy_level_3) AS total_booked_hours_project_hierarchy_level_3,  
+sum(CASE WHEN month > add_months(to_date(last_month, 'YYYY-MM-DD'), -3) AND month <= last_month  THEN booked_hours ELSE NULL END ) 
+OVER(PARTITION BY month,is_forecast,personalnumber_id, project_hierarchy_level_3) AS total_booked_hours_project_hierarchy_level_3_year  
+from final 
+
+    --where importmonth = month
+  group by 
+personalnumber_id,
+planningfield,
+solution,
+project_id,
+project,
+year,
+month,
+importdate,
+projektstatus,
+project_hierarchy_level_1,
+project_hierarchy_level_2,
+project_hierarchy_level_3,
+project_hierarchy_level_4,
+project_hierarchy_level_5,
+project_hierarchy_level_6,
+internal_external,
+bcs_role,
+fc_role,
+plan_fte,
+is_forecast,
+booked_hours,
+planned_hours,
+last_month,
+sap_lead_oe_1,
+sap_lead_oe_2,
+spending_oe,
+spending_oe1,
+spending_oe2,
+spending_oe3,
+importmonth,
+delivery_date,
+client
+  )
+  
+  Select 
+personalnumber_id	
+,planningfield	
+,solution	
+,project_id	
+,project	
+,year
+,month
+,importdate
+,booked_hours		
+,planned_hours		
+,total_booked_hours		
+,total_booked_hours_solution		
+,total_booked_hours_planningfield		
+,total_booked_hours_project_year		
+,total_booked_hours_year		
+,total_booked_hours_solution_year
+,total_booked_hours_planningfield_year
+,total_booked_hours_project_hierarchy_level_3
+,total_booked_hours_project_hierarchy_level_3_year,  
+  (
+total_booked_hours_project_year / total_booked_hours_year
+) AS avg_project_perc,
+(
+total_booked_hours_solution_year / total_booked_hours_year
+) AS avg_solution_perc,
+(
+total_booked_hours_planningfield_year / total_booked_hours_year
+) AS avg_planningfield_perc,
+(booked_hours / total_booked_hours) AS project_perc,
+(
+total_booked_hours_solution / total_booked_hours
+) AS solution_perc,
+(
+total_booked_hours_planningfield / total_booked_hours
+) AS planningfield_perc
+  ,projektstatus
+,project_hierarchy_level_1
+,project_hierarchy_level_2
+,project_hierarchy_level_3
+,project_hierarchy_level_4
+,project_hierarchy_level_5
+,project_hierarchy_level_6
+,internal_external
+,bcs_role
+,fc_role
+,plan_fte		
+,is_forecast	
+,total_booked_hours_project_hierarchy_level_3 / total_booked_hours
+ AS project_hierarchy_level_3_perc  ,
+total_booked_hours_project_hierarchy_level_3_year / total_booked_hours_year
+ AS avg_project_hierarchy_level_3_perc,
+last_month,
+      
+sap_lead_oe_1,
+sap_lead_oe_2,
+spending_oe,
+spending_oe1,
+spending_oe2,
+spending_oe3,
+delivery_date,
+client
+  from total
+  

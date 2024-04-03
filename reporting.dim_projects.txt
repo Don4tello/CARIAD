@@ -1,0 +1,45 @@
+--DROP VIEW reporting.dim_projects;
+CREATE VIEW reporting.dim_projects as
+with planningfield_rank as (Select 
+importdate,
+personalnumber_id,
+case 
+when coalesce(project_hierarchy_level_2,planningfield) like 'Service Order%' then 'Service Orders' 
+when coalesce(project_hierarchy_level_2,planningfield) in ('Pre-Development', 'R&D Overarching') then 'Others (R&D Overarching, Pre.-Dev.)' 
+else coalesce(project_hierarchy_level_2,planningfield) end
+planningfield,
+Sum(booked_hours) booked_hours,
+row_number() over (partition by importdate,personalnumber_id order by Sum(booked_hours) desc) as rank
+from reporting.report_employee_current_project_hours
+where  month = date_trunc('month',importdate)
+and booked_hours is not null 
+and delivery_date = (Select max(delivery_date) from reporting.report_employee_current_project_hours)
+group by 1,2,3
+)
+,stg1 as (
+Select 
+pfr.personalnumber_id, 
+pfr.importdate,
+max(case when pfr.rank = 1 then pfr.planningfield else null end) planningfield_name_1,
+max(case when pfr.rank = 2 then pfr.planningfield else null end) planningfield_name_2,
+max(case when pfr.rank = 3 then pfr.planningfield else null end) planningfield_name_3,
+max(case when pfr.rank = 1 then pfr.booked_hours else null end) planningfield_hours_1,
+max(case when pfr.rank = 2 then pfr.booked_hours else null end) planningfield_hours_2,
+max(case when pfr.rank = 3 then pfr.booked_hours else null end) planningfield_hours_3,
+Sum(pfr.booked_hours) total_booked_hours
+from planningfield_rank pfr
+group by 1,2
+)
+
+Select 
+stg1.personalnumber_id, 
+stg1.importdate,
+stg1.planningfield_name_1,
+stg1.planningfield_name_2,
+stg1.planningfield_name_3,
+stg1.planningfield_hours_1,
+stg1.planningfield_hours_2,
+stg1.planningfield_hours_3,
+stg1.total_booked_hours
+
+from stg1
